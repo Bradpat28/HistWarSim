@@ -11,6 +11,11 @@ window.onload = function() {
    var MOVE_CHECK_NUM = 10;
    var DRAW_INTERVAL = 10;
    var TIMEOUT = 10 * 1000;
+   var NUM_GENERATIONS = 10;
+   var NUM_SIMULATIONS = 10;
+   var NUM_TRAITS = 1;
+   var MAX_WEAPON_LENGTH = 60;
+   var MIN_WEAPON_LENGTH = 10;
 
    var intID = -1;
 
@@ -19,17 +24,26 @@ window.onload = function() {
    var STATS_BUTTON = document.getElementById("statsButton");
    var CANVAS = document.getElementById("simCanvas");
    var RUN_RESULTS = document.getElementById("runResults");
+   var RESULTS_LIST = document.getElementById("resultsList");
+
 
    var running = false;
-   //TODO NEED TO RESET TO 0 AT EACH RUN!
    var steps = 0;
+   var warriorsTop;
+   var warriorsBot;
 
+   var topWon = -1;
+   var fitScore = -1;
 
 
    START_BUTTON.onclick = function() {
-      running = true;
       if (intID < 0) {
-         intID = setInterval(draw, DRAW_INTERVAL);
+         if (running == false) {
+            run();
+         }
+         else {
+            intID = setInterval(draw, DRAW_INTERVAL);
+         }
       }
 
    };
@@ -39,7 +53,6 @@ window.onload = function() {
          clearInterval(intID);
          intID = -1;
       }
-      running = false;
    };
 
    var ctx = CANVAS.getContext("2d");
@@ -48,10 +61,47 @@ window.onload = function() {
 
    console.log("width = %d\n", canvasWidth);
    console.log("height = %d\n", canvasHeight);
+   var fittestWarriors;
+   var fitnessScore = 0;
+   var currGeneration = 0;
+   var simRan = 0;
+   var simulations = [];
 
-   var warriorsTop = createArmy(INIT_WEAPON_LEN, true, "white", INIT_ORIENT_TOP, WEP_TYPE_SPEAR, 2);
-   var warriorsBot = createArmy(20, false, "grey", INIT_ORIENT_BOT, WEP_TYPE_SPEAR, 2);
+   function run() {
+      running = true;
+      if (currGeneration < NUM_GENERATIONS) {
 
+         if (topWon != -1 && fitScore != -1) {
+            console.log("GENERATION %d SIM %d FIT SCORE %d TOP WON %d\n", currGeneration, simRan, fitScore, topWon);
+            var li = document.createElement("li");
+            li.appendChild(document.createTextNode("Generation: " + (currGeneration + 1) + " Sim: " + (simRan + 1) + " FitScore: " + fitScore + " Wep Len = " + warriorsBot[0].weaponLen));
+            RESULTS_LIST.appendChild(li);
+            fitScore = -1;
+            topWon = -1;
+            simRan++;
+         }
+         if (simRan < NUM_SIMULATIONS) {
+            if (simRan == 0) {
+               //Generate simuations
+               for (var i = 0; i < NUM_SIMULATIONS; i++) {
+                  simulations[i] = Math.floor(Math.random() * MAX_WEAPON_LENGTH) + MIN_WEAPON_LENGTH;;
+               }
+            }
+            warriorsTop = createArmy(INIT_WEAPON_LEN, true, "white", INIT_ORIENT_TOP, WEP_TYPE_SPEAR, 2);
+            warriorsBot = createArmy(simulations[simRan], false, "grey", INIT_ORIENT_BOT, WEP_TYPE_SPEAR, 2);
+            intID = setInterval(draw, DRAW_INTERVAL);
+         }
+         else {
+            simRan = 0;
+            currGeneration += 1;
+            topWon = -1;
+            run();
+         }
+      }
+      else {
+         running = false;
+      }
+   }
 
    function Warrior(x, y, color, radius, orientation, weaponLen, speed, id, wepType, isTop) {
       this.x = x;
@@ -151,6 +201,9 @@ window.onload = function() {
 
                }
             }
+            else {
+               edge = true;
+            }
             if (i > 0 && i < MOVE_CHECK_NUM) {
                if (edge) {
                   this.orientation = 360 * Math.PI / 180 - (this.orientation + Math.random(15 * Math.PI / 180));
@@ -214,6 +267,8 @@ window.onload = function() {
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
+      //console.log("DRAW STEPS = %d %d %d", steps, topWon, fitScore);
+
       var topDead = 0;
       var botDead = 0;
 
@@ -227,7 +282,7 @@ window.onload = function() {
          }
       }
       if (topDead == warriorsTop.length) {
-         botWins();
+         botWins(100);
       }
       for (var i = 0; i < warriorsBot.length; i++) {
          if (warriorsBot[i].isAlive) {
@@ -238,17 +293,21 @@ window.onload = function() {
             botDead += 1;
          }
       }
+
       if (botDead == warriorsBot.length) {
-         topWins();
+         topWins(0);
       }
 
       if (steps == TIMEOUT / DRAW_INTERVAL) {
-         console.log("BOT DEAD = %d TOP DEAD = %d\n", botDead, topDead);
-         if ((warriorsBot.length - botDead) / warriorsBot.length > (warriorsTop - topDead) / warriorsTop.length) {
-            botWins();
+         if ((warriorsBot.length - botDead) / warriorsBot.length > (warriorsTop.length - topDead) / warriorsTop.length) {
+            botWins(100 - 100 *(warriorsTop.length - topDead) / warriorsTop.length);
+
          }
          else {
-            topWins();
+            //console.log("score %d %d %d", (warriorsTop - topDead) / warriorsTop.length, warr);
+            //console.log(();
+            topWins(100 - 100 *(warriorsTop.length - topDead) / warriorsTop.length);
+
          }
       }
       else {
@@ -256,16 +315,26 @@ window.onload = function() {
       }
    }
 
-   function botWins() {
+   function botWins(fit) {
       clearInterval(intID);
       intID = -1;
       RUN_RESULTS.innerText = "BOTTOM CLAN WON!!!";
+      console.log("FIT = %d\n", fit);
+      topWon = 0;
+      fitScore = fit;
+      steps = 0;
+      run()
    }
 
-   function topWins() {
+   function topWins(fit) {
       clearInterval(intID);
       intID = -1;
       RUN_RESULTS.innerText = "TOP CLAN WON!!!";
+      console.log("FIT = %d\n", fit);
+      topWon = 1;
+      fitScore = fit;
+      steps = 0;
+      run();
    }
 
 
@@ -516,20 +585,6 @@ window.onload = function() {
       }
       return false;
    }
-
-   ctx.globalCompositeOperator = "source-over";
-   ctx.fillStyle = "white";
-   ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-   for (var i = 0; i < warriorsTop.length; i++) {
-      warriorsTop[i].draw();
-
-   }
-   for (var i = 0; i < warriorsBot.length; i++) {
-      warriorsBot[i].draw();
-
-   }
-
 
 
 }
